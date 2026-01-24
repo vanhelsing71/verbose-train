@@ -1,0 +1,281 @@
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime, date
+import re
+from typing import List, Dict
+from telegram import Bot
+from telegram.error import TelegramError
+import os
+from dotenv import load_dotenv
+import os
+import httpx
+
+load_dotenv()
+
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+MODEL = "deepseek-chat"
+
+EXCLUDED_KEYWORDS = ["Sarno", "Poggiomarino", "Baiano", "Acerra", "Nola", "Scafati", "Ottaviano", "Pomigliano", "Piedimonte", "Matese", "Cumana"]
+INCLUDED_KEYWORDS = ["Sorrento", "Castellammare", "Vico Equense", "Sant'Agnello", "Meta", "Piano di Sorrento", "Pompei Scavi", "Ercolano Scavi", "Torre del Greco", "Torre Annunziata"]
+
+BASE_URL = "https://www.eavsrl.it/infomobilita-ferrovia/"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; DailyLLMAgent/1.0)"
+}
+
+MESI_IT = {
+    "GEN": 1, "FEB": 2, "MAR": 3, "APR": 4,
+    "MAG": 5, "GIU": 6, "LUG": 7, "AGO": 8,
+    "SET": 9, "OTT": 10, "NOV": 11, "DIC": 12
+}
+
+SYSTEM_PROMPT = """Sei un assistente che riassume comunicazioni ufficiali di informazioni sulla mobilità ferroviaria. 
+Non aggiungere interpretazioni, non dare consigli, non inventare informazioni."""
+
+USER_PROMPT_TEMPLATE = """Ti fornisco una o più comunicazioni di informazioni sulla mobilità ferroviaria.
+Produci un riepilogo sintetico per un messaggio Telegram.
+
+Regole:
+- ogni punto deve essere abbastanza breve
+- se più comunicazioni parlano della stessa linea, accorpale
+- non ripetere la data se è sempre la stessa
+- se non ci sono disservizi rilevanti, scrivi: "Nessuna criticità rilevante segnalata."
+
+Testo:
+<<<
+{INPUT}
+>>>"""
+
+async def send_telegram_message(text: str):
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("CHAT_ID")
+
+    if not token or not chat_id:
+        raise RuntimeError("TELEGRAM_TOKEN o CHAT_ID non configurati")
+
+    bot = Bot(token=token)
+
+    try:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text[:4000],
+            disable_web_page_preview=True
+        )
+    except TelegramError as e:
+        raise RuntimeError(f"Errore invio Telegram: {e}")
+
+def parse_data_it(data_str: str) -> date | None:
+    """
+    Converte '20 GEN 2026' -> date(2026, 1, 20)
+    """
+    match = re.search(r"(\d{1,2})\s+([A-Z]{3})\s+(\d{4})", data_str.upper())
+    if not match:
+        return None
+
+    giorno, mese_str, anno = match.groups()
+    mese = MESI_IT.get(mese_str)
+    if not mese:
+        return None
+
+    return date(int(anno), mese, int(giorno))
+
+
+def collect_infomobilita_oggi(max_pages: int = 10) -> List[Dict]:
+    """
+    Raccoglie tutte le notizie:
+    - del giorno corrente
+    - di tipo 'Infomobilità Ferrovia'
+    - di tipo 'Linee Vesuviane - ...'
+    Naviga automaticamente la paginazione e il link "leggi di più".
+    """
+    oggi = date.today()
+    risultati = []
+
+    for page in range(1, max_pages + 1):
+        print(f"Navigo pagina {page}")
+        url = BASE_URL if page == 1 else f"{BASE_URL}page/{page}/"
+
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        # Cerca gli articoli di notizie reali, che sono dentro un contenitore
+        # più grande che è anch'esso un <article>
+        container = soup.find("div", class_="card-columns")
+        if not container:
+            # Fallback se la struttura cambia
+            container = soup
+
+        articoli = container.find_all("article", recursive=False)
+
+        if not articoli:
+            break
+
+        stop_scansione = False
+
+        for art in articoli:
+            # Trova il link "Leggi di più"
+            read_more_link = art.find("a", class_="read-more")
+            article_url = read_more_link["href"] if read_more_link else None
+
+            titolo_tag = art.find("h4", class_="card-title")
+            titolo_txt = titolo_tag.get_text(strip=True) if titolo_tag else ""
+
+            # Estrazione data
+            data_notizia = parse_data_it(art.get_text(strip=True))
+            if not data_notizia:
+                continue
+
+            # Se la notizia è più vecchia di oggi → stop totale
+            if data_notizia < oggi:
+                print("Trovata data non di oggi. Mi fermo")
+                stop_scansione = True
+                break
+            
+            # Estrai il testo: prima quello completo dalla pagina dell'articolo,
+            # poi come fallback il riassunto.
+            testo = ""
+            if article_url:
+                try:
+                    print(f"Navigo articolo: {article_url}")
+                    art_resp = requests.get(article_url, headers=HEADERS, timeout=10)
+                    art_resp.raise_for_status()
+                    art_soup = BeautifulSoup(art_resp.text, "html.parser")
+                    content = art_soup.find("section", class_="entry-content")
+                    if content:
+                        testo = content.get_text(separator=" ", strip=True)
+                except requests.RequestException as e:
+                    print(f"Errore nel leggere l'articolo {article_url}: {e}")
+
+            # Se non è stato possibile leggere il testo completo, usa il testo del wrapper
+            if not testo:
+                testo = art.get_text(separator=" ", strip=True)
+
+            # Filtro per parole chiave
+            text_lower = testo.lower()
+            has_excluded = any(keyword.lower() in text_lower for keyword in EXCLUDED_KEYWORDS)
+            has_included = any(keyword.lower() in text_lower for keyword in INCLUDED_KEYWORDS)
+
+            if has_excluded and not has_included:
+                print(f"Testo '{text_lower[:100]}...' contiene keyword esclusa e non inclusa. Scarto.")
+                continue
+
+            # Filtro categorie
+            if (
+                "infomobilità ferrovia" in text_lower
+                or "linee vesuviane" in text_lower
+            ):
+
+                risultati.append({
+                    "titolo": titolo_txt,
+                    "data": data_notizia.isoformat(),
+                    "testo": testo,
+                    "url": article_url
+                })
+
+        if stop_scansione:
+            break
+
+    return risultati
+
+def build_llm_input(notizie: list[dict]) -> str:
+    blocchi = []
+
+    for i, n in enumerate(notizie, start=1):
+        blocchi.append(
+            f"""
+            NOTIZIA {i}
+            Titolo: {n.get("titolo")}
+            Data: {n.get("data")}
+            Testo:
+            {n.get("testo")}
+            """
+        )
+
+    return "\n".join(blocchi)
+
+async def deepseek_chat(system_prompt: str, user_prompt: str) -> str:
+    if not DEEPSEEK_API_KEY:
+        raise RuntimeError("DEEPSEEK_API_KEY non configurata")
+
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.2,
+        "max_tokens": 500
+    }
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            DEEPSEEK_API_URL,
+            headers=headers,
+            json=payload
+        )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Errore DeepSeek {response.status_code}: {response.text}"
+        )
+
+    data = response.json()
+
+    return data["choices"][0]["message"]["content"].strip()
+
+
+async def summarize_with_llm(raw_text: str) -> str:
+    user_prompt = USER_PROMPT_TEMPLATE.format(INPUT=raw_text)
+    print("User prompt:")
+    print(user_prompt)
+    return await deepseek_chat(SYSTEM_PROMPT, user_prompt)
+
+async def main():
+    print("=== Avvio raccolta Infomobilità EAV ===")
+
+    try:
+        notizie = collect_infomobilita_oggi()
+
+        if not notizie:
+            msg = "Nessuna comunicazione Infomobilità Ferrovia / Linee Vesuviane per oggi."
+            await send_telegram_message(msg)
+            print("Nessuna notizia trovata. Messaggio inviato.")
+            return
+
+        parti_messaggio = ["📢 Infomobilità EAV Linea Napoli Sorrento – Oggi\n"]
+
+        for n in notizie:
+            parti_messaggio.append(f"📅 {n['data']}")
+            if n.get("titolo"):
+                parti_messaggio.append(f"{n['titolo']}")
+            parti_messaggio.append(n["testo"])
+            if n.get("url"):
+                parti_messaggio.append(n["url"])
+            parti_messaggio.append("-" * 30)
+
+        raw_input = build_llm_input(notizie)
+        print("\n--- Input per LLM ---\n")
+        print(raw_input)
+        print("\n---------------------\n")
+        riassunto = await summarize_with_llm(raw_input)
+
+        final_msg = "📢 Infomobilità EAV - Linea Napoli - Sorrento – Sintesi\n\n" + riassunto
+        await send_telegram_message(final_msg)
+
+        print(f"Inviate {len(notizie)} notizie via Telegram.")
+
+    except Exception as e:
+        print("ERRORE durante l'esecuzione")
+        print(type(e).__name__, str(e))
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
