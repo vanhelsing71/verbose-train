@@ -17,7 +17,7 @@ DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 MODEL = "deepseek-chat"
 
 EXCLUDED_KEYWORDS = ["Sarno", "Poggiomarino", "Baiano", "Acerra", "Nola", "Scafati", "Ottaviano", "Pomigliano", "Piedimonte", "Matese", "Cumana"]
-INCLUDED_KEYWORDS = ["Sorrento", "Castellammare", "Vico Equense", "Sant'Agnello", "Meta", "Piano di Sorrento", "Pompei Scavi", "Ercolano Scavi", "Torre del Greco", "Torre Annunziata"]
+#INCLUDED_KEYWORDS = ["Sorrento", "Castellammare", "Vico Equense", "Sant'Agnello", "Meta", "Piano di Sorrento", "Pompei Scavi", "Ercolano Scavi", "Torre del Greco", "Torre Annunziata"]
 
 BASE_URL = "https://www.eavsrl.it/infomobilita-ferrovia/"
 HEADERS = {
@@ -155,9 +155,9 @@ def collect_infomobilita_oggi(max_pages: int = 10) -> List[Dict]:
             # Filtro per parole chiave
             text_lower = testo.lower()
             has_excluded = any(keyword.lower() in text_lower for keyword in EXCLUDED_KEYWORDS)
-            has_included = any(keyword.lower() in text_lower for keyword in INCLUDED_KEYWORDS)
+            #has_included = any(keyword.lower() in text_lower for keyword in INCLUDED_KEYWORDS)
 
-            if has_excluded and not has_included:
+            if has_excluded: #and not has_included:
                 print(f"Testo '{text_lower[:100]}...' contiene keyword esclusa e non inclusa. Scarto.")
                 continue
 
