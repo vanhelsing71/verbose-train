@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 import os
 import httpx
+from typing import Optional
 
 load_dotenv()
 
@@ -65,7 +66,7 @@ async def send_telegram_message(text: str):
     except TelegramError as e:
         raise RuntimeError(f"Errore invio Telegram: {e}")
 
-def parse_data_it(data_str: str) -> date | None:
+def parse_data_it(data_str: str) -> Optional[date]:
     """
     Converte '20 GEN 2026' -> date(2026, 1, 20)
     """
