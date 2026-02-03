@@ -4,12 +4,13 @@ from datetime import datetime, date
 import re
 from typing import List, Dict
 from telegram import Bot, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import Application, ApplicationBuilder, CommandHandler, ContextTypes
 from telegram.error import TelegramError
 from dotenv import load_dotenv
 import os
 import httpx
 from typing import Optional
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 load_dotenv()
 
@@ -283,19 +284,25 @@ async def update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Avvio aggiornamento...")
     await run_update()
 
+async def post_init(application: Application):
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(run_update, 'cron', hour=6, minute=0)
+    scheduler.add_job(run_update, 'cron', hour=17, minute=0)
+    scheduler.start()
+
 def main():
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
         raise RuntimeError("TELEGRAM_TOKEN non configurato")
 
-    application = ApplicationBuilder().token(token).build()
-    
+    application = ApplicationBuilder().token(token).post_init(post_init).build()
+
     start_handler = CommandHandler('start', start)
     update_handler = CommandHandler('update', update)
-    
+
     application.add_handler(start_handler)
     application.add_handler(update_handler)
-    
+
     application.run_polling()
 
 
