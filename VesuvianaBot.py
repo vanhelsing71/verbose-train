@@ -3,9 +3,9 @@ from bs4 import BeautifulSoup
 from datetime import datetime, date
 import re
 from typing import List, Dict
-from telegram import Bot
+from telegram import Bot, Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from telegram.error import TelegramError
-import os
 from dotenv import load_dotenv
 import os
 import httpx
@@ -238,7 +238,7 @@ async def summarize_with_llm(raw_text: str) -> str:
     print(user_prompt)
     return await deepseek_chat(SYSTEM_PROMPT, user_prompt)
 
-async def main():
+async def run_update():
     print("=== Avvio raccolta Infomobilità EAV ===")
 
     try:
@@ -276,7 +276,28 @@ async def main():
         print("ERRORE durante l'esecuzione")
         print(type(e).__name__, str(e))
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="Bot avviato. Usa /update per recuperare le notizie.")
+
+async def update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="Avvio aggiornamento...")
+    await run_update()
+
+def main():
+    token = os.getenv("TELEGRAM_TOKEN")
+    if not token:
+        raise RuntimeError("TELEGRAM_TOKEN non configurato")
+
+    application = ApplicationBuilder().token(token).build()
+    
+    start_handler = CommandHandler('start', start)
+    update_handler = CommandHandler('update', update)
+    
+    application.add_handler(start_handler)
+    application.add_handler(update_handler)
+    
+    application.run_polling()
+
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
