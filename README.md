@@ -1,14 +1,16 @@
 # VesuvianaBot
 
-VesuvianaBot is a Python application designed to fetch, summarize, and disseminate real-time public transportation information for the "Linee Vesuviane" (Vesuvian Lines) operated by EAV srl in Italy. It scrapes official communications from the EAV website, uses a Large Language Model (LLM) to create concise summaries, and then publishes these updates to a specified Telegram chat.
+VesuvianaBot is a Python application designed to fetch, summarize, and disseminate real-time public transportation information for the "Linee Vesuviane" (Vesuvian Lines) operated by EAV srl in Italy. It scrapes official communications from the EAV website, uses a Large Language Model (LLM) to create concise summaries, and then publishes these updates to a specified Telegram chat via an interactive bot.
 
 ## Features
 
-- **Web Scraping:** Automatically collects the latest "Infomobilità Ferrovia" (Railway Mobility Information) from the EAV srl website.
+- **Robust Web Scraping:** Automatically collects the latest "Infomobilità Ferrovia" by navigating pagination and following links to get full article content.
 - **Intelligent Filtering:** Filters out irrelevant news based on predefined excluded keywords, ensuring only pertinent updates are processed.
-- **LLM-Powered Summarization:** Utilizes the DeepSeek API to generate brief and clear summaries of complex announcements, making them easy to digest for Telegram users.
-- **Telegram Integration:** Sends the summarized mobility updates directly to a configured Telegram chat.
-- **Asynchronous Operations:** Performs web scraping and API calls asynchronously for efficient operation.
+- **LLM-Powered Summarization:** Utilizes the DeepSeek API to generate brief and clear summaries of complex announcements.
+- **Interactive Telegram Bot:** Runs as a persistent Telegram bot that users can interact with.
+- **Scheduled Updates:** Automatically fetches and sends updates twice a day (at 6:00 and 17:00) using an internal scheduler.
+- **On-Demand Updates:** Allows users to manually trigger an update at any time using a simple command.
+- **Asynchronous Operations:** Performs API calls asynchronously for efficient, non-blocking operation.
 
 ## Setup and Installation
 
@@ -27,7 +29,6 @@ To run VesuvianaBot, you'll need Python 3.8+ and the following environment varia
     # source .venv/bin/activate # On Linux/macOS
     pip install -r requirements.txt
     ```
-    *(Note: You will need to create a `requirements.txt` file if it doesn't exist by running `pip freeze > requirements.txt` after installing the dependencies.)*
 
 3.  **Configure Environment Variables:**
     Create a `.env` file in the root directory of the project with the following variables:
@@ -39,23 +40,31 @@ To run VesuvianaBot, you'll need Python 3.8+ and the following environment varia
     ```
     -   **DEEPSEEK_API_KEY**: Obtain this from the DeepSeek API platform.
     -   **TELEGRAM_TOKEN**: Get this by creating a new bot with BotFather on Telegram.
-    -   **CHAT_ID**: The ID of the Telegram chat or channel where you want the messages to be sent. You can get your chat ID by forwarding a message from your chat to the `userinfobot` or by using a tool like `@getidsbot`.
+    -   **CHAT_ID**: The ID of the Telegram chat or channel where you want the messages to be sent. You can get your chat ID by forwarding a message from your chat to the `userinfobot`.
 
 ## Usage
 
-To run the bot, simply execute the main Python script:
+To run the bot, simply execute the main Python script. The bot will start, stay online, and handle everything automatically.
 
 ```bash
 ./.venv/Scripts/python VesuvianaBot.py # On Windows
 # ./.venv/bin/python VesuvianaBot.py # On Linux/macOS
 ```
 
-The script will fetch the latest information, process it, and send a summary to your configured Telegram chat. It's designed to be run periodically (e.g., via a cron job or scheduled task) to provide timely updates.
+Once running, the bot will:
+- Automatically send a summary of the latest news every day at **6:00 AM** and **5:00 PM**.
+- Respond to commands sent in the chat.
+
+### Bot Commands
+
+-   `/start`: Initializes the bot and sends a welcome message.
+-   `/update`: Manually triggers a new check for mobility news, processes it, and sends the summary to the chat immediately.
 
 ## Project Structure
 
--   `VesuvianaBot.py`: The main script containing the scraping logic, LLM integration, and Telegram messaging.
+-   `VesuvianaBot.py`: The main script containing the Telegram bot logic, scheduler, web scraper, and LLM integration.
 -   `.env`: (Ignored by Git) Stores sensitive API keys and configuration.
+-   `requirements.txt`: Lists all the Python dependencies for the project.
 
 ## Dependencies
 
@@ -65,3 +74,4 @@ The main dependencies are:
 - `python-dotenv`: For loading environment variables.
 - `python-telegram-bot`: For interacting with the Telegram Bot API.
 - `httpx`: For making asynchronous HTTP requests to the DeepSeek API.
+- `APScheduler`: For scheduling the automatic daily updates.

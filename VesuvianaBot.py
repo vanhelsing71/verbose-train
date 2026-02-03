@@ -18,7 +18,8 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 MODEL = "deepseek-chat"
 
-EXCLUDED_KEYWORDS = ["Sarno", "Poggiomarino", "Baiano", "Acerra", "Nola", "Scafati", "Ottaviano", "Pomigliano", "Piedimonte", "Matese", "Cumana"]
+EXCLUDED_KEYWORDS = ["Sarno", "Poggiomarino", "Baiano", "Acerra", "Nola", "Scafati", "Ottaviano", "Pomigliano",
+                     "Piedimonte", "Matese", "Cumana"]
 #INCLUDED_KEYWORDS = ["Sorrento", "Castellammare", "Vico Equense", "Sant'Agnello", "Meta", "Piano di Sorrento", "Pompei Scavi", "Ercolano Scavi", "Torre del Greco", "Torre Annunziata"]
 
 BASE_URL = "https://www.eavsrl.it/infomobilita-ferrovia/"
@@ -49,6 +50,7 @@ Testo:
 {INPUT}
 >>>"""
 
+
 async def send_telegram_message(text: str):
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
@@ -66,6 +68,7 @@ async def send_telegram_message(text: str):
         )
     except TelegramError as e:
         raise RuntimeError(f"Errore invio Telegram: {e}")
+
 
 def parse_data_it(data_str: str) -> Optional[date]:
     """
@@ -134,7 +137,7 @@ def collect_infomobilita_oggi(max_pages: int = 10) -> List[Dict]:
                 print("Trovata data non di oggi. Mi fermo")
                 stop_scansione = True
                 break
-            
+
             # Estrai il testo: prima quello completo dalla pagina dell'articolo,
             # poi come fallback il riassunto.
             testo = ""
@@ -159,16 +162,15 @@ def collect_infomobilita_oggi(max_pages: int = 10) -> List[Dict]:
             has_excluded = any(keyword.lower() in text_lower for keyword in EXCLUDED_KEYWORDS)
             #has_included = any(keyword.lower() in text_lower for keyword in INCLUDED_KEYWORDS)
 
-            if has_excluded: #and not has_included:
+            if has_excluded:  #and not has_included:
                 print(f"Testo '{text_lower[:100]}...' contiene keyword esclusa e non inclusa. Scarto.")
                 continue
 
             # Filtro categorie
             if (
-                "infomobilità ferrovia" in text_lower
-                or "linee vesuviane" in text_lower
+                    "infomobilità ferrovia" in text_lower
+                    or "linee vesuviane" in text_lower
             ):
-
                 risultati.append({
                     "titolo": titolo_txt,
                     "data": data_notizia.isoformat(),
@@ -180,6 +182,7 @@ def collect_infomobilita_oggi(max_pages: int = 10) -> List[Dict]:
             break
 
     return risultati
+
 
 def build_llm_input(notizie: list[dict]) -> str:
     blocchi = []
@@ -196,6 +199,7 @@ def build_llm_input(notizie: list[dict]) -> str:
         )
 
     return "\n".join(blocchi)
+
 
 async def deepseek_chat(system_prompt: str, user_prompt: str) -> str:
     if not DEEPSEEK_API_KEY:
@@ -239,6 +243,7 @@ async def summarize_with_llm(raw_text: str) -> str:
     print(user_prompt)
     return await deepseek_chat(SYSTEM_PROMPT, user_prompt)
 
+
 async def run_update():
     print("=== Avvio raccolta Infomobilità EAV ===")
 
@@ -277,18 +282,23 @@ async def run_update():
         print("ERRORE durante l'esecuzione")
         print(type(e).__name__, str(e))
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="Bot avviato. Usa /update per recuperare le notizie.")
+    await context.bot.send_message(chat_id=update.effective_chat.id,
+                                   text="Bot avviato. Usa /update per recuperare le notizie.")
+
 
 async def update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Avvio aggiornamento...")
     await run_update()
+
 
 async def post_init(application: Application):
     scheduler = AsyncIOScheduler()
     scheduler.add_job(run_update, 'cron', hour=6, minute=0)
     scheduler.add_job(run_update, 'cron', hour=17, minute=0)
     scheduler.start()
+
 
 def main():
     token = os.getenv("TELEGRAM_TOKEN")
