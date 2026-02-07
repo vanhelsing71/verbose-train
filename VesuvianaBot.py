@@ -11,6 +11,9 @@ import os
 import httpx
 from typing import Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from playwright.async_api import async_playwright
+import tempfile
+import asyncio # Add asyncio for sleep
 
 load_dotenv()
 
@@ -49,6 +52,33 @@ Testo:
 <<<
 {INPUT}
 >>>"""
+
+async def take_screenshot(url: str, filename_prefix: str = "screenshot") -> Optional[str]:
+    """
+    Navigates to a given URL, takes a full-page screenshot, and saves it to a temporary file.
+    Returns the path to the temporary file, or None if an error occurs.
+    """
+    temp_file = None
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            page = await browser.new_page()
+            await page.goto(url, wait_until="networkidle")
+            # Give the page a moment to fully render, especially if there are dynamic elements
+            await asyncio.sleep(2) 
+            
+            temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            await page.screenshot(path=temp_file.name, full_page=True)
+            await browser.close()
+            return temp_file.name
+    except Exception as e:
+        print(f"Error taking screenshot of {url}: {e}")
+        if temp_file:
+            os.remove(temp_file.name) # Clean up if file was created but error occurred
+        return None
+    finally:
+        if temp_file and not temp_file.closed:
+            temp_file.close()
 
 
 async def send_telegram_message(text: str):
@@ -296,9 +326,39 @@ async def update(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def post_init(application: Application):
     scheduler = AsyncIOScheduler()
     scheduler.add_job(run_update, 'cron', hour=6, minute=0)
+    scheduler.add_job(psorrento, 'cron', hour=6, minute=0)
     scheduler.add_job(run_update, 'cron', hour=17, minute=0)
+    scheduler.add_job(pnapoli, 'cron', hour=17, minute=0)
     scheduler.start()
 
+async def send_teleindicatori_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE, station_id: int, train_type: str, station_name: str):
+    arrival_departure_text = "partenze" if train_type == "P" else "arrivi"
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Generazione screenshot {arrival_departure_text} {station_name}...")
+    url = f"https://orariotreni.eavsrl.it/teleindicatori/?stazione={station_id}&tipo={train_type}"
+    screenshot_path = await take_screenshot(url)
+    if screenshot_path:
+        try:
+            with open(screenshot_path, 'rb') as f:
+                await context.bot.send_photo(chat_id=update.effective_chat.id, photo=f)
+        except Exception as e:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Errore nell'invio della foto: {e}")
+        finally:
+            os.remove(screenshot_path)
+    else:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="Errore nella creazione dello screenshot.")
+
+
+async def psorrento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_teleindicatori_screenshot(update, context, station_id=62, train_type="P", station_name="Sorrento")
+
+async def asorrento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_teleindicatori_screenshot(update, context, station_id=62, train_type="A", station_name="Sorrento")
+
+async def pnapoli(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_teleindicatori_screenshot(update, context, station_id=1, train_type="P", station_name="Napoli")
+
+async def anapoli(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_teleindicatori_screenshot(update, context, station_id=1, train_type="A", station_name="Napoli")
 
 def main():
     token = os.getenv("TELEGRAM_TOKEN")
@@ -309,9 +369,17 @@ def main():
 
     start_handler = CommandHandler('start', start)
     update_handler = CommandHandler('update', update)
+    psorrento_handler = CommandHandler('psorrento', psorrento)
+    asorrento_handler = CommandHandler('asorrento', asorrento)
+    pnapoli_handler = CommandHandler('pnapoli', pnapoli)
+    anapoli_handler = CommandHandler('anapoli', anapoli)
 
     application.add_handler(start_handler)
     application.add_handler(update_handler)
+    application.add_handler(psorrento_handler)
+    application.add_handler(asorrento_handler)
+    application.add_handler(pnapoli_handler)
+    application.add_handler(anapoli_handler)
 
     application.run_polling()
 

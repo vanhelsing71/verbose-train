@@ -4,3 +4,4 @@ python-dotenv
 python-telegram-bot
 httpx
 APScheduler
+playwright

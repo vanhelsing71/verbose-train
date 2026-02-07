@@ -10,7 +10,7 @@ VesuvianaBot is a Python application designed to fetch, summarize, and dissemina
 - **Interactive Telegram Bot:** Runs as a persistent Telegram bot that users can interact with.
 - **Scheduled Updates:** Automatically fetches and sends updates twice a day (at 6:00 and 17:00) using an internal scheduler.
 - **On-Demand Updates:** Allows users to manually trigger an update at any time using a simple command.
-- **Asynchronous Operations:** Performs API calls asynchronously for efficient, non-blocking operation.
+-   **Screenshot Train Timetables:** Provides real-time screenshots of train teleindicators for specific stations (Sorrento, Napoli) and routes (arrivals/departures).
 
 ## Setup and Installation
 
@@ -28,6 +28,8 @@ To run VesuvianaBot, you'll need Python 3.8+ and the following environment varia
     ./.venv/Scripts/activate # On Windows
     # source .venv/bin/activate # On Linux/macOS
     pip install -r requirements.txt
+    # Install Playwright browser binaries
+    python -m playwright install
     ```
 
 3.  **Configure Environment Variables:**
@@ -59,6 +61,10 @@ Once running, the bot will:
 
 -   `/start`: Initializes the bot and sends a welcome message.
 -   `/update`: Manually triggers a new check for mobility news, processes it, and sends the summary to the chat immediately.
+-   `/psorrento`: Sends a screenshot of the departures teleindicator for Sorrento station.
+-   `/asorrento`: Sends a screenshot of the arrivals teleindicator for Sorrento station.
+-   `/pnapoli`: Sends a screenshot of the departures teleindicator for Napoli station.
+-   `/anapoli`: Sends a screenshot of the arrivals teleindicator for Napoli station.
 
 ## Project Structure
 
@@ -75,3 +81,4 @@ The main dependencies are:
 - `python-telegram-bot`: For interacting with the Telegram Bot API.
 - `httpx`: For making asynchronous HTTP requests to the DeepSeek API.
 - `APScheduler`: For scheduling the automatic daily updates.
+- `playwright`: For web page rendering and taking screenshots of teleindicators.
