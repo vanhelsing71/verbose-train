@@ -326,39 +326,58 @@ async def update(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def post_init(application: Application):
     scheduler = AsyncIOScheduler()
     scheduler.add_job(run_update, 'cron', hour=6, minute=0)
-    scheduler.add_job(psorrento, 'cron', hour=6, minute=0)
+    scheduler.add_job(scheduled_psorrento_departures, 'cron', hour=6, minute=0)
     scheduler.add_job(run_update, 'cron', hour=17, minute=0)
-    scheduler.add_job(pnapoli, 'cron', hour=17, minute=0)
+    scheduler.add_job(scheduled_pnapoli_departures, 'cron', hour=17, minute=0)
     scheduler.start()
 
-async def send_teleindicatori_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE, station_id: int, train_type: str, station_name: str):
+async def scheduled_psorrento_departures():
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("CHAT_ID")
+    if not token or not chat_id:
+        print("TELEGRAM_TOKEN o CHAT_ID non configurati per la funzione schedulata.")
+        return
+    bot = Bot(token=token)
+    await send_teleindicatori_screenshot(bot, chat_id, station_id=62, train_type="P", station_name="Sorrento")
+
+async def scheduled_pnapoli_departures():
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("CHAT_ID")
+    if not token or not chat_id:
+        print("TELEGRAM_TOKEN o CHAT_ID non configurati per la funzione schedulata.")
+        return
+    bot = Bot(token=token)
+    await send_teleindicatori_screenshot(bot, chat_id, station_id=1, train_type="P", station_name="Napoli")
+
+
+async def send_teleindicatori_screenshot(bot: Bot, target_chat_id: str, station_id: int, train_type: str, station_name: str):
     arrival_departure_text = "partenze" if train_type == "P" else "arrivi"
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Generazione screenshot {arrival_departure_text} {station_name}...")
+    await bot.send_message(chat_id=target_chat_id, text=f"Generazione screenshot {arrival_departure_text} {station_name}...")
     url = f"https://orariotreni.eavsrl.it/teleindicatori/?stazione={station_id}&tipo={train_type}"
     screenshot_path = await take_screenshot(url)
     if screenshot_path:
         try:
             with open(screenshot_path, 'rb') as f:
-                await context.bot.send_photo(chat_id=update.effective_chat.id, photo=f)
+                await bot.send_photo(chat_id=target_chat_id, photo=f)
         except Exception as e:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=f"Errore nell'invio della foto: {e}")
+            await bot.send_message(chat_id=target_chat_id, text=f"Errore nell'invio della foto: {e}")
         finally:
             os.remove(screenshot_path)
     else:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="Errore nella creazione dello screenshot.")
+        await bot.send_message(chat_id=target_chat_id, text="Errore nella creazione dello screenshot.")
 
 
 async def psorrento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_teleindicatori_screenshot(update, context, station_id=62, train_type="P", station_name="Sorrento")
+    await send_teleindicatori_screenshot(context.bot, str(update.effective_chat.id), station_id=62, train_type="P", station_name="Sorrento")
 
 async def asorrento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_teleindicatori_screenshot(update, context, station_id=62, train_type="A", station_name="Sorrento")
+    await send_teleindicatori_screenshot(context.bot, str(update.effective_chat.id), station_id=62, train_type="A", station_name="Sorrento")
 
 async def pnapoli(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_teleindicatori_screenshot(update, context, station_id=1, train_type="P", station_name="Napoli")
+    await send_teleindicatori_screenshot(context.bot, str(update.effective_chat.id), station_id=1, train_type="P", station_name="Napoli")
 
 async def anapoli(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_teleindicatori_screenshot(update, context, station_id=1, train_type="A", station_name="Napoli")
+    await send_teleindicatori_screenshot(context.bot, str(update.effective_chat.id), station_id=1, train_type="A", station_name="Napoli")
 
 def main():
     token = os.getenv("TELEGRAM_TOKEN")
