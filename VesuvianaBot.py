@@ -327,6 +327,7 @@ async def post_init(application: Application):
     scheduler = AsyncIOScheduler()
     scheduler.add_job(run_update, 'cron', hour=6, minute=0)
     scheduler.add_job(scheduled_psorrento_departures, 'cron', hour=6, minute=0)
+    scheduler.add_job(scheduled_alilauro, 'cron', hour=6, minute=0)
     scheduler.add_job(run_update, 'cron', hour=17, minute=0)
     scheduler.add_job(scheduled_pnapoli_departures, 'cron', hour=17, minute=0)
     scheduler.start()
@@ -340,6 +341,15 @@ async def scheduled_psorrento_departures():
     bot = Bot(token=token)
     await send_teleindicatori_screenshot(bot, chat_id, station_id=62, train_type="P", station_name="Sorrento")
 
+async def scheduled_alilauro():
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("CHAT_ID")
+    if not token or not chat_id:
+        print("TELEGRAM_TOKEN o CHAT_ID non configurati per la funzione schedulata.")
+        return
+    bot = Bot(token=token)
+    await send_alilauro_screenshot(bot, chat_id)
+
 async def scheduled_pnapoli_departures():
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
@@ -348,6 +358,22 @@ async def scheduled_pnapoli_departures():
         return
     bot = Bot(token=token)
     await send_teleindicatori_screenshot(bot, chat_id, station_id=1, train_type="P", station_name="Napoli")
+
+async def send_alilauro_screenshot(bot: Bot,target_chat_id: str):
+    await bot.send_message(chat_id=target_chat_id,
+                           text=f"Generazione screenshot Alilauro...")
+    url = "https://www.alilauro.it/it/"
+    screenshot_path = await take_screenshot(url)
+    if screenshot_path:
+        try:
+            with open(screenshot_path, 'rb') as f:
+                await bot.send_photo(chat_id=target_chat_id, photo=f)
+        except Exception as e:
+            await bot.send_message(chat_id=target_chat_id, text=f"Errore nell'invio della foto: {e}")
+        finally:
+            os.remove(screenshot_path)
+    else:
+        await bot.send_message(chat_id=target_chat_id, text="Errore nella creazione dello screenshot.")
 
 
 async def send_teleindicatori_screenshot(bot: Bot, target_chat_id: str, station_id: int, train_type: str, station_name: str):
@@ -366,6 +392,8 @@ async def send_teleindicatori_screenshot(bot: Bot, target_chat_id: str, station_
     else:
         await bot.send_message(chat_id=target_chat_id, text="Errore nella creazione dello screenshot.")
 
+async def alilauro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_alilauro_screenshot(context.bot, str(update.effective_chat.id))
 
 async def psorrento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_teleindicatori_screenshot(context.bot, str(update.effective_chat.id), station_id=62, train_type="P", station_name="Sorrento")
@@ -392,6 +420,7 @@ def main():
     asorrento_handler = CommandHandler('asorrento', asorrento)
     pnapoli_handler = CommandHandler('pnapoli', pnapoli)
     anapoli_handler = CommandHandler('anapoli', anapoli)
+    alilauro_handler = CommandHandler('alilauro', alilauro)
 
     application.add_handler(start_handler)
     application.add_handler(update_handler)
@@ -399,6 +428,7 @@ def main():
     application.add_handler(asorrento_handler)
     application.add_handler(pnapoli_handler)
     application.add_handler(anapoli_handler)
+    application.add_handler(alilauro_handler)
 
     application.run_polling()
 
