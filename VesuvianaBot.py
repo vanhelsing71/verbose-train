@@ -325,14 +325,12 @@ async def update(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def post_init(application: Application):
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(run_update, 'cron', hour=6, minute=0)
-    scheduler.add_job(scheduled_psorrento_departures, 'cron', hour=6, minute=0)
-    scheduler.add_job(scheduled_alilauro, 'cron', hour=6, minute=0)
-    scheduler.add_job(run_update, 'cron', hour=17, minute=0)
-    scheduler.add_job(scheduled_pnapoli_departures, 'cron', hour=17, minute=0)
+    scheduler.add_job(scheduled_morning, 'cron', hour=6, minute=0)
+    scheduler.add_job(scheduled_evening, 'cron', hour=17, minute=0)
     scheduler.start()
 
-async def scheduled_psorrento_departures():
+async def scheduled_morning():
+    await run_update()
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
     if not token or not chat_id:
@@ -340,17 +338,10 @@ async def scheduled_psorrento_departures():
         return
     bot = Bot(token=token)
     await send_teleindicatori_screenshot(bot, chat_id, station_id=62, train_type="P", station_name="Sorrento")
-
-async def scheduled_alilauro():
-    token = os.getenv("TELEGRAM_TOKEN")
-    chat_id = os.getenv("CHAT_ID")
-    if not token or not chat_id:
-        print("TELEGRAM_TOKEN o CHAT_ID non configurati per la funzione schedulata.")
-        return
-    bot = Bot(token=token)
     await send_alilauro_screenshot(bot, chat_id)
 
-async def scheduled_pnapoli_departures():
+async def scheduled_evening():
+    await run_update()
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
     if not token or not chat_id:
@@ -358,6 +349,8 @@ async def scheduled_pnapoli_departures():
         return
     bot = Bot(token=token)
     await send_teleindicatori_screenshot(bot, chat_id, station_id=1, train_type="P", station_name="Napoli")
+    await send_alilauro_screenshot(bot, chat_id)
+
 
 async def send_alilauro_screenshot(bot: Bot,target_chat_id: str):
     await bot.send_message(chat_id=target_chat_id,
