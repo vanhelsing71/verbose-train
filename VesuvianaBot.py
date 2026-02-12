@@ -68,7 +68,7 @@ async def take_screenshot(url: str, filename_prefix: str = "screenshot") -> Opti
             await asyncio.sleep(2) 
             
             temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-            await page.screenshot(path=temp_file.name, full_page=False)
+            await page.screenshot(path=temp_file.name, full_page=True)
             await browser.close()
             return temp_file.name
     except Exception as e:
@@ -325,7 +325,8 @@ async def update(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def post_init(application: Application):
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(scheduled_morning, 'cron', hour=6, minute=0)
+    scheduler.add_job(scheduled_morning, 'cron', hour=6, minute=15)
+    scheduler.add_job(scheduled_morning2, 'cron', hour=7, minute=00)
     scheduler.add_job(scheduled_evening, 'cron', hour=17, minute=0)
     scheduler.start()
 
@@ -338,6 +339,15 @@ async def scheduled_morning():
         return
     bot = Bot(token=token)
     await send_teleindicatori_screenshot(bot, chat_id, station_id=62, train_type="P", station_name="Sorrento")
+
+async def scheduled_morning2():
+    await run_update()
+    token = os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("CHAT_ID")
+    if not token or not chat_id:
+        print("TELEGRAM_TOKEN o CHAT_ID non configurati per la funzione schedulata.")
+        return
+    bot = Bot(token=token)
     await send_alilauro_screenshot(bot, chat_id)
 
 async def scheduled_evening():
