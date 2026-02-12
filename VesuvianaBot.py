@@ -55,7 +55,7 @@ Testo:
 
 async def take_screenshot(url: str, filename_prefix: str = "screenshot") -> Optional[str]:
     """
-    Navigates to a given URL, takes a full-page screenshot, and saves it to a temporary file.
+    Navigates to a given URL, takes a page screenshot, and saves it to a temporary file.
     Returns the path to the temporary file, or None if an error occurs.
     """
     temp_file = None
@@ -68,7 +68,7 @@ async def take_screenshot(url: str, filename_prefix: str = "screenshot") -> Opti
             await asyncio.sleep(2) 
             
             temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-            await page.screenshot(path=temp_file.name, full_page=True)
+            await page.screenshot(path=temp_file.name, full_page=False)
             await browser.close()
             return temp_file.name
     except Exception as e:
