@@ -1,3 +1,7 @@
+"""
+Bot Telegram per monitorare comunicazioni EAV, riassumerle con un LLM e inviare
+aggiornamenti (testo e screenshot) su orari/avvisi ferroviari.
+"""
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, date
@@ -13,7 +17,7 @@ from typing import Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from playwright.async_api import async_playwright
 import tempfile
-import asyncio # Add asyncio for sleep
+import asyncio  # Sleep per attendere il rendering completo delle pagine
 
 load_dotenv()
 
@@ -53,10 +57,17 @@ Testo:
 {INPUT}
 >>>"""
 
-async def take_screenshot(url: str, filename_prefix: str = "screenshot") -> Optional[str]:
+async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str = "screenshot") -> Optional[str]:
     """
-    Navigates to a given URL, takes a page screenshot, and saves it to a temporary file.
-    Returns the path to the temporary file, or None if an error occurs.
+    Cattura uno screenshot della pagina o di un elemento specifico e lo salva in un file temporaneo.
+
+    Args:
+        url: URL da aprire in Playwright.
+        alilauro: Se True, rimuove il popup e salva solo la tabella delle partenze.
+        filename_prefix: Prefisso per il nome del file temporaneo (solo indicativo).
+
+    Returns:
+        Percorso del file temporaneo creato oppure None in caso di errore.
     """
     temp_file = None
     try:
@@ -68,7 +79,11 @@ async def take_screenshot(url: str, filename_prefix: str = "screenshot") -> Opti
             await asyncio.sleep(2) 
             
             temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
-            await page.screenshot(path=temp_file.name, full_page=True)
+            if alilauro:
+                await page.locator("#sgpb-popup-dialog-main-div-wrapper > div > img").click() # get rid of the advert
+                await page.locator("#tt-arma").screenshot(path=temp_file.name) # we capture only the table of the departures
+            else:
+                await page.screenshot(path=temp_file.name, full_page=True)
             await browser.close()
             return temp_file.name
     except Exception as e:
@@ -82,6 +97,15 @@ async def take_screenshot(url: str, filename_prefix: str = "screenshot") -> Opti
 
 
 async def send_telegram_message(text: str):
+    """
+    Invia un messaggio Telegram al chat_id configurato.
+
+    Args:
+        text: Testo da inviare (verrà troncato a 4000 caratteri).
+
+    Raises:
+        RuntimeError: Se la configurazione è incompleta o l'invio fallisce.
+    """
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
 
@@ -102,7 +126,13 @@ async def send_telegram_message(text: str):
 
 def parse_data_it(data_str: str) -> Optional[date]:
     """
-    Converte '20 GEN 2026' -> date(2026, 1, 20)
+    Converte una data italiana nel formato '20 GEN 2026' in un oggetto date.
+
+    Args:
+        data_str: Stringa contenente la data.
+
+    Returns:
+        Date convertita o None se il formato non è riconosciuto.
     """
     match = re.search(r"(\d{1,2})\s+([A-Z]{3})\s+(\d{4})", data_str.upper())
     if not match:
@@ -123,6 +153,12 @@ def collect_infomobilita_oggi(max_pages: int = 10) -> List[Dict]:
     - di tipo 'Infomobilità Ferrovia'
     - di tipo 'Linee Vesuviane - ...'
     Naviga automaticamente la paginazione e il link "leggi di più".
+
+    Args:
+        max_pages: Numero massimo di pagine da scansionare.
+
+    Returns:
+        Lista di dizionari con titolo, data, testo e URL della notizia.
     """
     oggi = date.today()
     risultati = []
@@ -215,6 +251,15 @@ def collect_infomobilita_oggi(max_pages: int = 10) -> List[Dict]:
 
 
 def build_llm_input(notizie: list[dict]) -> str:
+    """
+    Costruisce il testo da fornire al modello LLM a partire dalle notizie raccolte.
+
+    Args:
+        notizie: Lista di notizie normalizzate.
+
+    Returns:
+        Stringa pronta per il prompt utente dell'LLM.
+    """
     blocchi = []
 
     for i, n in enumerate(notizie, start=1):
@@ -232,6 +277,16 @@ def build_llm_input(notizie: list[dict]) -> str:
 
 
 async def deepseek_chat(system_prompt: str, user_prompt: str) -> str:
+    """
+    Invoca l'API DeepSeek con prompt di sistema e utente.
+
+    Args:
+        system_prompt: Prompt di sistema.
+        user_prompt: Prompt utente con le notizie formattate.
+
+    Returns:
+        Risposta testuale del modello.
+    """
     if not DEEPSEEK_API_KEY:
         raise RuntimeError("DEEPSEEK_API_KEY non configurata")
 
@@ -268,6 +323,15 @@ async def deepseek_chat(system_prompt: str, user_prompt: str) -> str:
 
 
 async def summarize_with_llm(raw_text: str) -> str:
+    """
+    Genera un riepilogo LLM a partire dal testo grezzo.
+
+    Args:
+        raw_text: Testo delle notizie aggregate.
+
+    Returns:
+        Riassunto sintetico pronto per l'invio Telegram.
+    """
     user_prompt = USER_PROMPT_TEMPLATE.format(INPUT=raw_text)
     print("User prompt:")
     print(user_prompt)
@@ -275,6 +339,9 @@ async def summarize_with_llm(raw_text: str) -> str:
 
 
 async def run_update():
+    """
+    Flusso principale: raccoglie notizie, genera sintesi LLM e invia il messaggio Telegram.
+    """
     print("=== Avvio raccolta Infomobilità EAV ===")
 
     try:
@@ -314,16 +381,25 @@ async def run_update():
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /start: conferma che il bot è attivo.
+    """
     await context.bot.send_message(chat_id=update.effective_chat.id,
                                    text="Bot avviato. Usa /update per recuperare le notizie.")
 
 
 async def update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /update: avvia subito l'aggiornamento manuale.
+    """
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Avvio aggiornamento...")
     await run_update()
 
 
 async def post_init(application: Application):
+    """
+    Configura gli scheduler giornalieri dopo l'inizializzazione del bot.
+    """
     scheduler = AsyncIOScheduler()
     scheduler.add_job(scheduled_morning, 'cron', hour=6, minute=15)
     scheduler.add_job(scheduled_morning2, 'cron', hour=7, minute=00)
@@ -331,6 +407,9 @@ async def post_init(application: Application):
     scheduler.start()
 
 async def scheduled_morning():
+    """
+    Job mattutino: invia aggiornamento notizie e screenshot partenze Sorrento.
+    """
     await run_update()
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
@@ -341,6 +420,9 @@ async def scheduled_morning():
     await send_teleindicatori_screenshot(bot, chat_id, station_id=62, train_type="P", station_name="Sorrento")
 
 async def scheduled_morning2():
+    """
+    Job mattutino: invia aggiornamento notizie e screenshot Alilauro.
+    """
     await run_update()
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
@@ -351,6 +433,9 @@ async def scheduled_morning2():
     await send_alilauro_screenshot(bot, chat_id)
 
 async def scheduled_evening():
+    """
+    Job serale: invia aggiornamento notizie e screenshot Napoli + Alilauro.
+    """
     await run_update()
     token = os.getenv("TELEGRAM_TOKEN")
     chat_id = os.getenv("CHAT_ID")
@@ -363,10 +448,17 @@ async def scheduled_evening():
 
 
 async def send_alilauro_screenshot(bot: Bot,target_chat_id: str):
+    """
+    Genera e invia uno screenshot della tabella partenze Alilauro.
+
+    Args:
+        bot: Istanza Bot già inizializzata.
+        target_chat_id: Chat ID destinatario.
+    """
     await bot.send_message(chat_id=target_chat_id,
                            text=f"Generazione screenshot Alilauro...")
     url = "https://www.alilauro.it/it/"
-    screenshot_path = await take_screenshot(url)
+    screenshot_path = await take_screenshot(url, True)
     if screenshot_path:
         try:
             with open(screenshot_path, 'rb') as f:
@@ -380,6 +472,16 @@ async def send_alilauro_screenshot(bot: Bot,target_chat_id: str):
 
 
 async def send_teleindicatori_screenshot(bot: Bot, target_chat_id: str, station_id: int, train_type: str, station_name: str):
+    """
+    Genera e invia uno screenshot dei teleindicatori EAV per una stazione.
+
+    Args:
+        bot: Istanza Bot già inizializzata.
+        target_chat_id: Chat ID destinatario.
+        station_id: ID stazione EAV.
+        train_type: "P" per partenze o "A" per arrivi.
+        station_name: Nome leggibile della stazione.
+    """
     arrival_departure_text = "partenze" if train_type == "P" else "arrivi"
     await bot.send_message(chat_id=target_chat_id, text=f"Generazione screenshot {arrival_departure_text} {station_name}...")
     url = f"https://orariotreni.eavsrl.it/teleindicatori/?stazione={station_id}&tipo={train_type}"
@@ -396,21 +498,39 @@ async def send_teleindicatori_screenshot(bot: Bot, target_chat_id: str, station_
         await bot.send_message(chat_id=target_chat_id, text="Errore nella creazione dello screenshot.")
 
 async def alilauro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /alilauro: invia lo screenshot Alilauro nella chat corrente.
+    """
     await send_alilauro_screenshot(context.bot, str(update.effective_chat.id))
 
 async def psorrento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /psorrento: invia le partenze Sorrento nella chat corrente.
+    """
     await send_teleindicatori_screenshot(context.bot, str(update.effective_chat.id), station_id=62, train_type="P", station_name="Sorrento")
 
 async def asorrento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /asorrento: invia gli arrivi Sorrento nella chat corrente.
+    """
     await send_teleindicatori_screenshot(context.bot, str(update.effective_chat.id), station_id=62, train_type="A", station_name="Sorrento")
 
 async def pnapoli(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /pnapoli: invia le partenze Napoli nella chat corrente.
+    """
     await send_teleindicatori_screenshot(context.bot, str(update.effective_chat.id), station_id=1, train_type="P", station_name="Napoli")
 
 async def anapoli(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Comando /anapoli: invia gli arrivi Napoli nella chat corrente.
+    """
     await send_teleindicatori_screenshot(context.bot, str(update.effective_chat.id), station_id=1, train_type="A", station_name="Napoli")
 
 def main():
+    """
+    Entry point: inizializza il bot, registra i comandi e avvia il polling.
+    """
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
         raise RuntimeError("TELEGRAM_TOKEN non configurato")
