@@ -81,6 +81,9 @@ async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str
             temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
             if alilauro:
                 await page.locator("#sgpb-popup-dialog-main-div-wrapper > div > img").click() # get rid of the advert
+                await page.locator("body > div.ahw-wrap.is-open > div.ahw-panel > div.ahw-top > button").click() # get rid of the help window
+                await page.get_by_role("button", name = "Accetta").click() # get rid of the cookie policy
+
                 await page.locator("#tt-arma").screenshot(path=temp_file.name) # we capture only the table of the departures
             else:
                 await page.screenshot(path=temp_file.name, full_page=True)
