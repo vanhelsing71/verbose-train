@@ -96,6 +96,15 @@ async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str
         except Exception as remove_error:
             print(f"Skip remove '{selector}': {remove_error}")
 
+    async def hide_elements(selector: str) -> None:
+        """
+        Nasconde elementi persistenti tramite CSS, utile se vengono reinseriti dinamicamente.
+        """
+        try:
+            await page.add_style_tag(content=f"{selector} {{ display: none !important; visibility: hidden !important; }}")
+        except Exception as hide_error:
+            print(f"Skip hide '{selector}': {hide_error}")
+
     temp_file = None
     try:
         async with async_playwright() as p:
@@ -109,7 +118,7 @@ async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str
             if alilauro:
                 await safe_click(
                     "close advert",
-                    selector="#sgpb-popup-dialog-main-div-wrapper > div > img"
+                    selector="img.sgpb-popup-close-button-2"
                 )
                 await safe_click(
                     "close help window",
@@ -120,6 +129,9 @@ async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str
                 await page.locator("#tt-arma").screenshot(path=temp_file.name) # we capture only the table of the departures
 
             else:
+                await hide_elements("div.InfoSupplementare")
+                await remove_elements("div.InfoSupplementare")
+                await asyncio.sleep(0.5)
                 await remove_elements("div.InfoSupplementare")
                 await page.screenshot(path=temp_file.name, full_page=True)
 
