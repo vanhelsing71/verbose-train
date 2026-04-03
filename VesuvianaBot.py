@@ -69,6 +69,33 @@ async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str
     Returns:
         Percorso del file temporaneo creato oppure None in caso di errore.
     """
+    async def safe_click(description: str, *, selector: Optional[str] = None, role_name: Optional[str] = None) -> None:
+        """
+        Prova a cliccare un elemento senza interrompere il flusso se non disponibile.
+        """
+        try:
+            if selector:
+                await page.locator(selector).first.click(timeout=3000)
+            elif role_name:
+                await page.get_by_role("button", name=role_name).first.click(timeout=3000)
+        except Exception as click_error:
+            print(f"Skip click '{description}': {click_error}")
+
+    async def remove_elements(selector: str) -> None:
+        """
+        Rimuove eventuali elementi che possono coprire il contenuto utile nello screenshot.
+        """
+        try:
+            await page.locator(selector).evaluate_all(
+                """elements => {
+                    for (const element of elements) {
+                        element.remove();
+                    }
+                }"""
+            )
+        except Exception as remove_error:
+            print(f"Skip remove '{selector}': {remove_error}")
+
     temp_file = None
     try:
         async with async_playwright() as p:
@@ -80,13 +107,22 @@ async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str
             
             temp_file = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
             if alilauro:
-                await page.locator("#sgpb-popup-dialog-main-div-wrapper > div > img").click() # get rid of the advert
-                await page.locator("body > div.ahw-wrap.is-open > div.ahw-panel > div.ahw-top > button").click() # get rid of the help window
-                await page.get_by_role("button", name = "Accetta").click() # get rid of the cookie policy
+                await safe_click(
+                    "close advert",
+                    selector="#sgpb-popup-dialog-main-div-wrapper > div > img"
+                )
+                await safe_click(
+                    "close help window",
+                    selector="body > div.ahw-wrap.is-open > div.ahw-panel > div.ahw-top > button"
+                )
+                await safe_click("accept cookies", role_name="Accetta")
 
                 await page.locator("#tt-arma").screenshot(path=temp_file.name) # we capture only the table of the departures
+
             else:
+                await remove_elements("div.InfoSupplementare")
                 await page.screenshot(path=temp_file.name, full_page=True)
+
             await browser.close()
             return temp_file.name
     except Exception as e:
