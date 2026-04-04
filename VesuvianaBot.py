@@ -74,10 +74,29 @@ async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str
         Prova a cliccare un elemento senza interrompere il flusso se non disponibile.
         """
         try:
+            locator = None
             if selector:
-                await page.locator(selector).first.click(timeout=3000)
+                locator = page.locator(selector).first
             elif role_name:
-                await page.get_by_role("button", name=role_name).first.click(timeout=3000)
+                locator = page.get_by_role("button", name=role_name).first
+
+            if locator is None:
+                return
+
+            await locator.wait_for(state="visible", timeout=3000)
+
+            try:
+                await locator.scroll_into_view_if_needed(timeout=1000)
+            except Exception:
+                pass
+
+            try:
+                await locator.click(timeout=3000)
+            except Exception:
+                try:
+                    await locator.click(timeout=1000, force=True)
+                except Exception:
+                    await locator.evaluate("(element) => element.click()")
         except Exception as click_error:
             print(f"Skip click '{description}': {click_error}")
 
@@ -120,11 +139,15 @@ async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str
                     "close advert",
                     selector="img.sgpb-popup-close-button-2"
                 )
+                await remove_elements("div.sgpb-popup-overlay, div.sgpb-popup-dialog-main-div-wrapper")
                 await safe_click(
                     "close help window",
                     selector="body > div.ahw-wrap.is-open > div.ahw-panel > div.ahw-top > button"
                 )
                 await safe_click("accept cookies", role_name="Accetta")
+                await remove_elements("div.ahw-wrap.is-open")
+                await remove_elements("section.iubenda-cs-container, div.iubenda-cs-overlay")
+                await page.locator("#tt-arma").wait_for(state="visible", timeout=10000)
 
                 await page.locator("#tt-arma").screenshot(path=temp_file.name) # we capture only the table of the departures
 
