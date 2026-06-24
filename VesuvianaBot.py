@@ -517,7 +517,7 @@ async def scheduled_evening():
         print("TELEGRAM_TOKEN o CHAT_ID non configurati per la funzione schedulata.")
         return
     bot = Bot(token=token)
-    await send_teleindicatori_screenshot(bot, chat_id, station_id=1, train_type="P", station_name="Napoli")
+    await send_teleindicatori_screenshot(bot, chat_id, station_id=59, train_type="A", station_name="Meta")
     await send_alilauro_screenshot(bot, chat_id)
 
 
