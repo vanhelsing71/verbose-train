@@ -8,13 +8,13 @@ VesuvianaBot is a Python application designed to fetch, summarize, and dissemina
 - **Intelligent Filtering:** Filters out irrelevant news based on predefined excluded keywords, ensuring only pertinent updates are processed.
 - **LLM-Powered Summarization:** Utilizes the DeepSeek API to generate brief and clear summaries of complex announcements.
 - **Interactive Telegram Bot:** Runs as a persistent Telegram bot that users can interact with.
-- **Scheduled Updates:** Automatically fetches and sends updates twice a day (at 6:00 and 17:00) using an internal scheduler.
+- **Scheduled Updates:** Automatically fetches and sends updates three times a day (at 6:15, 7:00, and 17:00) using an internal scheduler.
 - **On-Demand Updates:** Allows users to manually trigger an update at any time using a simple command.
 -   **Screenshot Train Timetables:** Provides real-time screenshots of train teleindicators for specific stations (Sorrento, Napoli) and routes (arrivals/departures).
 
 ## Setup and Installation
 
-To run VesuvianaBot, you'll need Python 3.8+ and the following environment variables configured.
+To run VesuvianaBot, you'll need Python 3.9+ and the following environment variables configured.
 
 1.  **Clone the repository:**
     ```bash
@@ -54,7 +54,7 @@ To run the bot, simply execute the main Python script. The bot will start, stay 
 ```
 
 Once running, the bot will:
-- Automatically send a summary of the latest news every day at **6:00 AM** and **5:00 PM**.
+- Automatically send a summary of the latest news every day at **6:15 AM**, **7:00 AM**, and **5:00 PM**.
 - Respond to commands sent in the chat.
 
 ### Bot Commands
@@ -65,6 +65,7 @@ Once running, the bot will:
 -   `/asorrento`: Sends a screenshot of the arrivals teleindicator for Sorrento station.
 -   `/pnapoli`: Sends a screenshot of the departures teleindicator for Napoli station.
 -   `/anapoli`: Sends a screenshot of the arrivals teleindicator for Napoli station.
+-   `/alilauro`: Sends a screenshot of the Alilauro ferry teleindicator.
 
 ## Project Structure
 

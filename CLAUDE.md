@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VesuvianaBot is a Python application that scrapes transportation updates from the EAV srl website (Linee Vesuviane railway in Italy), summarizes them using the DeepSeek LLM API, and sends summaries to a Telegram chat. The bot is designed to run periodically (e.g., via cron job or scheduled task) to provide timely mobility updates.
+VesuvianaBot is a Python application that scrapes transportation updates from the EAV srl website (Linee Vesuviane railway in Italy), summarizes them using the DeepSeek LLM API, and sends summaries to a Telegram chat. The bot runs as a **long-running process** (Telegram polling + an embedded APScheduler in one event loop), not a one-shot script.
 
 ## Environment Setup
 
@@ -37,7 +37,7 @@ Execute the main script:
 ./.venv/bin/python VesuvianaBot.py
 ```
 
-The script runs once and exits. It's intended for scheduled execution.
+The bot starts and stays alive: Telegram polling and APScheduler run together in one event loop. It is not a one-shot script.
 
 ## Architecture
 
