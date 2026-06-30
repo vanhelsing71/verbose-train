@@ -1,3 +1,4 @@
 .env
-sample.env
 .idea/
+__pycache__/
+.playwright-mcp/

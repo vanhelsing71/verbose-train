@@ -1,0 +1,17 @@
+[Unit]
+Description=VesuvianaBot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=massimo
+WorkingDirectory=/home/massimo/vesuvianabot/verbose-train
+EnvironmentFile=/home/massimo/vesuvianabot/.env
+ExecStart=/home/massimo/vesuvianabot/venv/bin/python VesuvianaBot.py
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -57,6 +57,54 @@ Once running, the bot will:
 - Automatically send a summary of the latest news every day at **6:15 AM**, **7:00 AM**, and **5:00 PM**.
 - Respond to commands sent in the chat.
 
+### Automatic Startup on Linux (Armbian / systemd)
+
+To run VesuvianaBot automatically on boot on an Armbian device (or any systemd-based Linux distribution), create a systemd service unit.
+
+1.  **Install Playwright system dependencies:**
+    ```bash
+    ./.venv/bin/python -m playwright install --with-deps chromium
+    ```
+
+2.  **Create the service file:**
+    ```bash
+    sudo nano /etc/systemd/system/vesuvianabot.service
+    ```
+    Paste the contents of the [`vesuvianabot.service`](vesuvianabot.service) file included in this repository, adjusting the paths and `User` to match your installation (the example assumes the repo is cloned at `/home/massimo/vesuvianabot/verbose-train` with user `massimo`).
+
+    ```ini
+    [Unit]
+    Description=VesuvianaBot
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    Type=simple
+    User=massimo
+    WorkingDirectory=/home/massimo/vesuvianabot/verbose-train
+    EnvironmentFile=/home/massimo/vesuvianabot/verbose-train/.env
+    ExecStart=/home/massimo/vesuvianabot/verbose-train/.venv/bin/python VesuvianaBot.py
+    Restart=on-failure
+    RestartSec=10
+    TimeoutStopSec=30
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+
+3.  **Enable and start the service:**
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl enable vesuvianabot
+    sudo systemctl start vesuvianabot
+    ```
+
+4.  **Verify status and logs:**
+    ```bash
+    sudo systemctl status vesuvianabot
+    journalctl -u vesuvianabot -f
+    ```
+
 ### Bot Commands
 
 -   `/start`: Initializes the bot and sends a welcome message.

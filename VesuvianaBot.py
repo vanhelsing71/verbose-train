@@ -479,6 +479,7 @@ async def post_init(application: Application):
     scheduler.add_job(scheduled_morning2, 'cron', hour=7, minute=00)
     scheduler.add_job(scheduled_evening, 'cron', hour=17, minute=0)
     scheduler.start()
+    await send_telegram_message("✅ Programma avviato")
 
 async def scheduled_morning():
     """
