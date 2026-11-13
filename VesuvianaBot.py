@@ -30,6 +30,7 @@ EXCLUDED_KEYWORDS = ["Sarno", "Poggiomarino", "Baiano", "Acerra", "Nola", "Scafa
 #INCLUDED_KEYWORDS = ["Sorrento", "Castellammare", "Vico Equense", "Sant'Agnello", "Meta", "Piano di Sorrento", "Pompei Scavi", "Ercolano Scavi", "Torre del Greco", "Torre Annunziata"]
 
 BASE_URL = "https://www.eavsrl.it/infomobilita-ferrovia/"
+ALILAURO_URL = "https://www.alilauro.it/it/prossime-partenze/"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; DailyLLMAgent/1.0)"
 }
@@ -81,6 +82,9 @@ async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str
                 locator = page.get_by_role("button", name=role_name).first
 
             if locator is None:
+                return
+
+            if await locator.count() == 0:
                 return
 
             await locator.wait_for(state="visible", timeout=3000)
@@ -145,11 +149,14 @@ async def take_screenshot(url: str, alilauro: bool = False, filename_prefix: str
                     selector="body > div.ahw-wrap.is-open > div.ahw-panel > div.ahw-top > button"
                 )
                 await safe_click("accept cookies", role_name="Accetta")
-                await remove_elements("div.ahw-wrap.is-open")
+                await remove_elements("div.ahw-wrap.is-open, div.ahw-wrap")
                 await remove_elements("section.iubenda-cs-container, div.iubenda-cs-overlay")
-                await page.locator("#tt-arma").wait_for(state="visible", timeout=10000)
+                await remove_elements(".home-support-trigger, .skip-link")
 
-                await page.locator("#tt-arma").screenshot(path=temp_file.name) # we capture only the table of the departures
+                board_locator = page.locator(".live-board, #tt-arma").first
+                await board_locator.wait_for(state="visible", timeout=10000)
+
+                await board_locator.screenshot(path=temp_file.name) # Cattura solo il tabellone delle partenze
 
             else:
                 await hide_elements("div.InfoSupplementare")
@@ -522,7 +529,7 @@ async def scheduled_evening():
     await send_alilauro_screenshot(bot, chat_id)
 
 
-async def send_alilauro_screenshot(bot: Bot,target_chat_id: str):
+async def send_alilauro_screenshot(bot: Bot, target_chat_id: str):
     """
     Genera e invia uno screenshot della tabella partenze Alilauro.
 
@@ -531,9 +538,8 @@ async def send_alilauro_screenshot(bot: Bot,target_chat_id: str):
         target_chat_id: Chat ID destinatario.
     """
     await bot.send_message(chat_id=target_chat_id,
-                           text=f"Generazione screenshot Alilauro...")
-    url = "https://www.alilauro.it/it/"
-    screenshot_path = await take_screenshot(url, True)
+                           text="Generazione screenshot Alilauro...")
+    screenshot_path = await take_screenshot(ALILAURO_URL, True)
     if screenshot_path:
         try:
             with open(screenshot_path, 'rb') as f:
